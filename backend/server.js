@@ -1,6 +1,3 @@
-// // server.js
-// // PDF Question Answering API using Gemini AI
-
 // const express = require("express");
 // const cors = require("cors");
 // const multer = require("multer");
@@ -16,7 +13,10 @@
 // app.use(express.json());
 
 // // --- FILE UPLOAD SETUP ---
-// const upload = multer({ storage: multer.memoryStorage() });
+// const upload = multer({
+//   storage: multer.memoryStorage(),
+//   limits: { fileSize: 30 * 1024 * 1024 }, // Limit to 10MB
+// });
 
 // // --- GOOGLE GEMINI AI SETUP ---
 // const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -59,10 +59,50 @@
 // // In-memory store for PDF content chunks and their embeddings
 // const vectorStore = [];
 
+// // --- SSE SETUP ---
+// const clients = new Map(); // Store client responses for SSE
+
+// // Middleware to track upload progress
+// const trackUploadProgress = (req, res, next) => {
+//   let received = 0;
+//   const contentLength = parseInt(req.headers["content-length"] || "0");
+
+//   req.on("data", (chunk) => {
+//     received += chunk.length;
+//     const progress = contentLength ? Math.round((received / contentLength) * 100) : 0;
+
+//     // Send progress to all connected SSE clients
+//     clients.forEach((clientRes, clientId) => {
+//       clientRes.write(`data: ${JSON.stringify({ progress })}\n\n`);
+//     });
+//   });
+
+//   next();
+// };
+
+// // SSE endpoint for progress updates
+// app.get("/progress", (req, res) => {
+//   const clientId = Date.now().toString();
+
+//   res.writeHead(200, {
+//     "Content-Type": "text/event-stream",
+//     "Cache-Control": "no-cache",
+//     Connection: "keep-alive",
+//   });
+
+//   clients.set(clientId, res);
+
+//   // Clean up when client disconnects
+//   req.on("close", () => {
+//     clients.delete(clientId);
+//     res.end();
+//   });
+// });
+
 // // --- ROUTES ---
 
 // // Upload and process PDF
-// app.post("/upload", upload.single("pdf"), async (req, res) => {
+// app.post("/upload", trackUploadProgress, upload.single("pdf"), async (req, res) => {
 //   try {
 //     const fileBuffer = req.file.buffer;
 //     const text = await pdfToText(fileBuffer);
@@ -76,6 +116,11 @@
 //       const embedding = await getEmbeddingFromText(chunks[i]);
 //       vectorStore.push({ id: i, text: chunks[i], embedding });
 //     }
+
+//     // Notify clients of completion
+//     clients.forEach((clientRes) => {
+//       clientRes.write(`data: ${JSON.stringify({ progress: 100, complete: true })}\n\n`);
+//     });
 
 //     res.send({
 //       message: "PDF processed. You can now ask questions.",
@@ -144,6 +189,8 @@
 
 
 
+
+
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
@@ -152,7 +199,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 require("dotenv").config();
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5000; // Use Vercel's dynamic port
 
 // --- MIDDLEWARE SETUP ---
 app.use(cors());
@@ -161,7 +208,7 @@ app.use(express.json());
 // --- FILE UPLOAD SETUP ---
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 30 * 1024 * 1024 }, // Limit to 10MB
+  limits: { fileSize: 30 * 1024 * 1024 }, // 30MB limit
 });
 
 // --- GOOGLE GEMINI AI SETUP ---
@@ -315,7 +362,5 @@ app.get("/", (req, res) => {
   res.send("✅ PDF QA API is live!");
 });
 
-// Start server
-app.listen(port, () => {
-  console.log(`🚀 Server is running on http://localhost:${port}`);
-});
+// Export the app for Vercel
+module.exports = app;

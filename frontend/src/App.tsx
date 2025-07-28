@@ -23,7 +23,7 @@ function App() {
 
     if (isUploading) {
       // Connect to SSE endpoint
-      eventSource = new EventSource("http://localhost:5000/progress");
+      eventSource = new EventSource("https://backend-wheat-six-35.vercel.app/progress");
 
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -64,7 +64,7 @@ function App() {
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/upload",
+        "https://backend-wheat-six-35.vercel.app/upload",
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
